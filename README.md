@@ -7,7 +7,7 @@ allocated and resizable buffers, depending on the hardware requirements.
 
 It's quite simple and does nothing really fancy so you can easily understand what it
 does, but when I wrote it in 2009, it was fully tested for embedded hardware with small
-memory requirements. It passes Valgrind.
+memory requirements. It passes Valgrind and has been successfully used in production.
 Unfortunaly I no longer have the tests suite so you'll have to write your own before 
 using this library.
 

@@ -5,7 +5,7 @@
 A secure C string library that's designed with embedded development in mind.
 
 This is yet another implementation of the classic {length, char*} structure which provides much better security than char* alone as it prevents buffer overflows by automating changes in string length. The programmer no longer needs to worry about this.
-This particular implementation was designed so it can be used either with stack based preallocated buffers or dynamically allocated and resizable buffers, depending on the hardware requirements.
+This particular implementation was designed so it can be used either with stack based preallocated buffers or dynamically allocated and resizable buffers, depending on the hardware requirements. The code is also simple enough to be easily understandable and extensible.
 
 This library provides two types of strings:
 

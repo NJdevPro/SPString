@@ -21,8 +21,8 @@ and will raise an error if it's not the case, instead of silently overflowing. T
 
 In order to operate, the actual structure of String and LString is {length, buffer size, char*}, where buffer size is the length of the allocated buffer while length is the length of the string itself (terminal \0 excluded). Both values are maintained automatically and therefore the user should **not** modify the String or LString structures directly, but should instead strive to always use the string functions provided by the library to manipulate them.
 
-One can easily create a String from a C string with
-newString(const char *).
+One can easily create a String from a C string with 
+newString(const char *) 
 
 String.str always returns a null-terminated C chain, and String.len
 returns its length.
@@ -36,8 +36,8 @@ Here is a helpful correspondance table between C functions and their counterpart
 |malloc            |newString                           |localString
 |free              |delString                           |- (stack allocated)
 |strlen            |stringlen                           |stringlen
-|strcpy            |stringcpy, stringchcpy              |ltringcpy, lstringchpy
-|strncpy           |stringcpy, stringchcpy              |ltringcpy, lstringchpy
+|strcpy            |stringcpy, stringchcpy              |lstringcpy, lstringchpy
+|strncpy           |stringcpy, stringchcpy              |lstringcpy, lstringchpy
 |strcat            |stringcat, stringchcat              |lstringcat, ltringchcat
 |strcmp            |stringcmp, stringchcmp              |lstringcmp, lstringchcmp
 |strdup            |stringdup                           |lstringdup

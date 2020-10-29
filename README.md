@@ -59,3 +59,5 @@ One has to call get_error() to know the value of an error code. However, apart f
 |ST_INCONSISTENTLEN_ERR     |-1006   |Inconsistent length detected (corruption)
 
 Finally, stringcheck performs several verifications on a String or a LString in order to check that it is not corrupted. It can be useful in debugging sessions.
+
+Published under MIT License

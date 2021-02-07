@@ -17,7 +17,8 @@
 *
 * Author: Nicolas Janin <>, (C) 2009
 *
-* Copyright: LGPL
+* Published under MIT License
+* strlcpy copyrghted by its author
 *
 */
  

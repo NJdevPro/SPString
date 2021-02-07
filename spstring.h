@@ -40,7 +40,7 @@
     Example Usage:
     {
       #define SIZE 40   <--- the LString can never grow longer than 39 chars
-      const char buff[SIZE] = "Hello";
+      static char buff[SIZE] = "Hello";
       LString *hello = localString(buff, SIZE);
       ...
       lstringchcat(hello, " World !");

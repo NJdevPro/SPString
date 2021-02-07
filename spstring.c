@@ -368,7 +368,7 @@ LString lstringdup ( const LString *src )
         LString string;
         if ( src != NULL )
         {
-                string = localString ( src->str, src->len );
+                string = localString ( src->str, src->sz );
         }
         else
         {
@@ -451,7 +451,7 @@ String * stringtrunc ( String *string, size_t N )
 #ifdef NDEBUG
         stringcheck ( string, __FILE__, __LINE__ );
 #endif
-        string->len = N;
+        string->len = N-1;
         string->str[N-1] = '\0';
 #ifdef TIDY
         size_t l = string->len;

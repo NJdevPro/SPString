@@ -22,7 +22,7 @@
 *    directly in order to prevent corruption (i.e mainly incorrect sz and
 *    len values).
 *
-*    Most functions mirror standard C functions.
+*    Most functions mirror the standard C functions.
 */
  
 #ifndef SPSTRING_H
@@ -30,26 +30,27 @@
  
 #include <stddef.h>
  
-/* ---- Allocation on the stack (non dynamic)
+/* =========================================================================
+   Allocation on the stack (non dynamic)
+   
    The size sz is fixed once and for all at creation and must be the maximum
    size of the buffer holding the string, not the length of the C character
-   string passed as parameter at initialization.
+   string passed at initialization. Anything past will be truncated.
  
     Example Usage:
     {
-      #define SIZE 40   /* the LString cannot never grow longer than 39 chars */
+      #define SIZE 40   <--- the LString can never grow longer than 39 chars
       const char buff[SIZE] = "Hello";
       LString *hello = localString(buff, SIZE);
       ...
       lstringchcat(hello, " World !");
-    } /* automatic deallocation at end of scope */
+    }  <--- automatic deallocation at the end of the scope
  
    Warning: The following does not work (because localString does  
             not allocate memory):
     LString *hello = localString("Hello World", SIZE);  
 */
  
-/* Definition of a local String */
 typedef struct {
     size_t sz;  /* max buffer size, fixed, always > len */
     size_t len; /*length (final '\0' excluded)            */
@@ -66,8 +67,8 @@ size_t lstringchcat ( LString *dst, const char *src );
 LString lstringdup ( const LString *src );
  
  
-/* --- Dynamic allocation
-   The size is automatically adjusted at any time.
+/* =================== Dynamic allocation on the Heap =======================
+   The size is automatically adjusted at runtime.
    
    Usage example:
       LString *hello = newString("Hello ");
@@ -84,8 +85,8 @@ typedef struct{
 } String;
  
 /* Allocate a new String object.
- * The source buffer passed as parameter is copied so it must be
- * deallocated manually. */
+ * The source buffer passed as argument is copied, so it must be
+ * freed manually. */
 String * newString(const char *);
 void delString(String *);
  
@@ -95,7 +96,8 @@ size_t stringcat(String *dst, const String *src);
 size_t stringchcat(String *dst, const char *src);
 String * stringdup(const String *);
  
-/* --- The following functions apply both on String and LString */
+/* ========== The following functions apply both
+   ========== on String and LString ===================*/
  
 size_t stringlen(const String *);
 int stringcmp(const String *st1, const String *st2);
@@ -103,6 +105,7 @@ int stringchcmp(const String *st1, const char *st2);
 /* Truncation of length to Nth character */
 String * stringtrunc(String *string, size_t N);
 void stringprintf ( String *dst, const char * format, ... );
+
 /* Verification of internal consistency of a String/LString
    Can be useful in a debugging session */
 int stringcheck(const String *string, char *file, int line);

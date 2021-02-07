@@ -37,7 +37,8 @@
 /* private (internal mechanics) */
 static int ST_ERR = ST_NO_ERR;
 static int incsz ( String *string, size_t len );
- 
+size_t strlcpy(char *dst, const char *src, size_t siz);
+
 /* --- Dynamic allocation
  
  String can dynamically increase in size as necessary. */

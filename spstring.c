@@ -114,7 +114,7 @@ size_t stringcpy ( String *dst, const String *src )
  
         dst->len = len;
 #ifdef TIDY
-        strlcpy ( dst->str, src->str, len );
+        strlcpy ( dst->str, src->str, len + 1 );
 #else
         strcpy ( dst->str, src->str );
 #endif
@@ -143,7 +143,7 @@ size_t stringchcpy ( String *dst, const char *src )
  
         dst->len = len;
 #ifdef TIDY
-        strlcpy ( dst->str, src, len );
+        strlcpy ( dst->str, src, len + 1 );
 #else
         strcpy ( dst->str, src );
 #endif
@@ -273,7 +273,7 @@ size_t lstringcpy ( LString *dst, const LString *src )
         }
         dst->len = len;
 #ifdef TIDY
-        strlcpy ( dst->str, src->str, dst->sz );
+        strlcpy ( dst->str, src->str, dst->sz + 1 );
 #else
         strcpy ( dst->str, src->str );
 #endif
@@ -301,7 +301,7 @@ size_t lstringchcpy ( LString *dst, const char *src )
         }
         dst->len = len;
 #ifdef TIDY
-        strlcpy ( dst->str, src, dst->sz );
+        strlcpy ( dst->str, src, dst->sz + 1 );
 #else
         strcpy ( dst->str, src );
 #endif

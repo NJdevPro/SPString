@@ -393,7 +393,7 @@ int stringcheck ( const String *string, char *file, int line )
 {
 #ifdef NDEBUG
         #define ASSERT(cond) if ( !(cond) ) { \
-                        printf("stringcheck error %s line %d:String(%d/%d)=\"%s\"\n", \
+                        printf("stringcheck error %s line %d:String(%zu/%zu)=\"%s\"\n", \
                         file, line, string->len, string->sz, string->str); \
                         assert( string != NULL ); }
         ASSERT ( string != NULL );

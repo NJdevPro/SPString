@@ -26,8 +26,8 @@ int main()
   delString(s2);
 
   // Allocation on the stack
-  char t0[50] = "This LString is very long.";
-  char t1[30] = "Shorter LString.";
+  static char t0[50] = "This LString is very long.";
+  static char t1[30] = "Shorter LString.";
   LString ls0 = localString(t0, 50);
   LString ls1 = localString(t1, 30);
   

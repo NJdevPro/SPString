@@ -40,10 +40,11 @@ Here is a helpful correspondance table between C functions and their counterpart
 |strncpy           |stringcpy, stringchcpy              |lstringcpy, lstringchpy
 |strcat            |stringcat, stringchcat              |lstringcat, ltringchcat
 |strcmp            |stringcmp, stringchcmp              |lstringcmp, lstringchcmp
-|strdup            |stringdup                           |lstringdup
+|strdup            |stringdup                           |lstringcpy *
 |truncation        |stringtrunc                         |stringtrunc
 |printf            |stringprintf                        |stringprintf
 
+* Why is there no lstringdup? While stringdup allocates a buffer dynamically, for lstringdup, one has to allocate it statically beforehand, so it doesn't do anything else than lstringcpy.
 
 Additionnally, the functions can internally raise an error, but because the functions try to mimic the standard C functions interfaces, the error code is not always returned.
 One has to call get_error() to know the value of an error code. However, apart from allocation failures (memory full), the need to check fo error should only arise at testing or debugging time.

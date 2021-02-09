@@ -360,23 +360,6 @@ size_t lstringchcat ( LString *dst, const char *src )
         return len;
 }
  
-LString lstringdup ( const LString *src )
-{
-#ifdef NDEBUG
-        stringcheck ( ( String * ) src, __FILE__, __LINE__ );
-#endif
-        LString string;
-        if ( src != NULL )
-        {
-                string = localString ( src->str, src->sz );
-        }
-        else
-        {
-                ST_ERR = ST_NULLPARAM_ERR;
-                string = ( LString ) {0, 0, NULL};
-        }
-        return string;
-}
  
 /* The following functions apply both on String and LString */
  

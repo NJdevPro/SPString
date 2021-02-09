@@ -64,7 +64,6 @@ size_t lstringcpy ( LString *dst, const LString *src );
 size_t lstringchcpy ( LString *dst, const char *src );
 size_t lstringcat ( LString *dst, const LString *src );
 size_t lstringchcat ( LString *dst, const char *src );
-LString lstringdup ( const LString *src );
  
  
 /* =================== Dynamic allocation on the Heap =======================

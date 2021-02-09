@@ -41,6 +41,6 @@ int main()
   lstringchcat(&ls2, " This is a C chain.");
   printf("[%s] has length %ld and buffer size %ld\n", ls2.str, ls2.len, ls2.sz);
   
-  printf(stringchcmp(&ls1, t1) == 0 ? "The chains are identical" : "The chains are different");
+  printf(stringchcmp((String*) &ls1, t1) == 0 ? "The chains are identical" : "The chains are different");
   return 0;
 }

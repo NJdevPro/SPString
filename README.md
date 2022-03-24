@@ -61,4 +61,12 @@ One has to call get_error() to know the value of an error code. However, apart f
 
 Finally, stringcheck performs several verifications on a String or a LString in order to check that it is not corrupted. It can be useful in debugging sessions.
 
+## Preprocessor flags
+
+There are two optional flags:
+- TIDY will try to keep the buffers as clean as possible by zero-ing all the extra space
+- NDEBUG performs verifications of input parameters and performs internal verifications at each function call
+
+Both flags are turned off by default.
+
 Published under MIT License

@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-I.
+CFLAGS=-Wall -O2 -I.
 DEPS = spstring.h
 OBJ = spstring.o demo.o 
 

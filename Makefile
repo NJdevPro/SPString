@@ -9,7 +9,7 @@ OBJ = spstring.o demo.o
 demo: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS)
 
-check:
+check: demo
 	./demo
 
 clean:

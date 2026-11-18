@@ -72,7 +72,7 @@ One has to call `get_stringerr()` to retrieve and reset the error code. Apart fr
 |ST_INCONSISTENTSZ_ERR      |-1005   |Inconsistent buffer size detected (corruption)
 |ST_INCONSISTENTLEN_ERR     |-1006   |Inconsistent length detected (corruption)
 
-The error state is thread-local (one per thread, like `errno`): an error raised in one thread is never seen or reset by another. It is only touched when an error occurs or when `get_stringerr()` is called, so it costs nothing on the normal path.
+The error state is thread-local (one per thread, like `errno`) when the compiler supports it: an error raised in one thread is never seen or reset by another. On a compiler not recognized by the implementation, it falls back to an ordinary static variable and is not thread-safe. Define `SPSTRING_NO_THREADS` to explicitly use that fallback on targets without thread-local storage support. The error state is only touched when an error occurs or when `get_stringerr()` is called.
 
 The comparison functions always return a valid ordering, even when given NULL: a NULL `String` (or a NULL buffer) sorts before any string and two NULLs compare equal, so they can safely be used with `qsort`. The NULL parameter is reported through `get_stringerr()`.
 

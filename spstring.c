@@ -194,15 +194,24 @@ size_t stringcat ( String *dst, const String *src )
                 return ( size_t ) ST_ERR;
         }
         size_t finallen = oldlen + len;
+        /* src may be a separate String view into dst's buffer. Preserve its
+           offset so it remains valid if growing dst reallocates the buffer. */
+        int alias = inbuffer ( dst, src->str );
+        size_t offset = alias
+                ? ( size_t ) ( ( uintptr_t ) src->str - ( uintptr_t ) dst->str )
+                : 0;
+        const char *source = src->str;
         if ( dst->sz <= finallen )
         {
                 if ( incsz ( dst, finallen + 1 ) == ST_ALLOC_ERR )
                 {
                         return ST_ALLOC_ERR;
                 }
+                if ( alias )
+                        source = dst->str + offset;
         }
  
-        memmove ( dst->str + oldlen, src->str, len + 1 );
+        memmove ( dst->str + oldlen, source, len + 1 );
         dst->len = finallen;
 #ifdef TIDY
         size_t l = dst->len;

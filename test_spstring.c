@@ -286,6 +286,24 @@ static void test_aliasing(void)
         stringprintf(s, "%.3s", s->str + 7);
         check_string(s, "abc");
         delString(s);
+
+        s = newString("abc");
+        CHECK(s != NULL);
+        if (s == NULL)
+                return;
+        String view = *s;
+        CHECK(stringcat(s, &view) == 3);
+        check_string(s, "abcabc");
+        delString(s);
+
+        s = newString("abcd");
+        CHECK(s != NULL);
+        if (s == NULL)
+                return;
+        String partial_view = { 4, 3, s->str + 1 };
+        CHECK(stringcat(s, &partial_view) == 3);
+        check_string(s, "abcdbcd");
+        delString(s);
 }
 
 static void test_error_preserved_by_growth(void)

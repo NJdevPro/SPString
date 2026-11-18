@@ -16,6 +16,14 @@ at runtime, just like Java or C++ strings. It comes with a host of functions tha
 It comes with a host of functions that mirror the C string functions (lstringcpy and the like) that can check at runtime that the correct buffer sizes are respected
 and will raise an error if it's not the case, instead of silently overflowing. These functions allow to detect and pinpoint buffer overflow bugs during testing phase.
 
+## Build and Test
+
+Build with `make`.
+
+Run the regression suite with `make check` . This will run both with and without
+the optional buffer-clearing mode enabled.
+
+Run the demo with `./demo`.
 
 # How to use the library
 
@@ -74,9 +82,5 @@ The optional `TIDY` flag keeps the unused buffer space zeroed. `stringcheck` can
 
 `TIDY` is turned off by default.
 
+
 Published under MIT License
-
-## Tests
-
-Run the regression suite with `make test` (also included in `make check`). Run it with
-the optional buffer-clearing mode enabled using `make test-tidy`.

@@ -3,14 +3,25 @@ CFLAGS=-Wall -O2 -I.
 DEPS = spstring.h
 OBJ = spstring.o demo.o 
 
+.PHONY: check test test-tidy clean
+
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 demo: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS)
 
-check: demo
-	./demo
+test_spstring: spstring.c test_spstring.c spstring.h
+	$(CC) -o $@ spstring.c test_spstring.c $(CFLAGS)
+
+test: test_spstring
+	./test_spstring
+
+test-tidy:
+	$(CC) -DTIDY -o test_spstring_tidy spstring.c test_spstring.c $(CFLAGS)
+	./test_spstring_tidy
+
+check: test-tidy test
 
 clean:
-	rm *.o
+	rm -f *.o test_spstring test_spstring_tidy demo

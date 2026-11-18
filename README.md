@@ -10,7 +10,7 @@ This particular implementation was designed so it can be used either with stack 
 This library provides two types of strings:
 
 1. **String** is a fully dynamic string. It will resize automatically
-at runtime, just like Java or C++ strings. It comes with a host of functions that mirror the C string functions, but will additionnally resize the target buffer when it's too small to perform the operation.
+at runtime, just like Java or C++ strings. It comes with a host of functions that mirror the C string functions, but will additionally resize the target buffer when it's too small to perform the operation.
 
 2. **LString** (Local String) has a fixed buffer size defined at declaration.
 It comes with a host of functions that mirror the C string functions (lstringcpy and the like) that can check at runtime that the correct buffer sizes are respected
@@ -19,7 +19,7 @@ and will raise an error if it's not the case, instead of silently overflowing. T
 
 # How to use the library
 
-In order to operate, the actual structure of String and LString is {length, buffer size, char*}, where buffer size is the length of the allocated buffer while length is the length of the string itself (terminal \0 excluded). Both values are maintained automatically and therefore the user should **not** modify the String or LString structures directly, but should instead strive to always use the string functions provided by the library to manipulate them.
+In order to operate, the actual structure of String and LString is {buffer size, length, char*}, where buffer size is the length of the allocated buffer while length is the length of the string itself (terminal \0 excluded). Both values are maintained automatically and therefore the user should **not** modify the String or LString structures directly, but should instead strive to always use the string functions provided by the library to manipulate them.
 
 One can easily create a String from a C string with 
 newString(const char *) 
@@ -29,25 +29,30 @@ returns its length.
 
 Most functions mirror standard C functions. You will need to allocate a String with newString and delete it with delString.
 
-Here is a helpful correspondance table between C functions and their counterparts:
+Here is a helpful correspondence table between C functions and their counterparts:
 
 |C function        |String                              |LString
 |:-----------------|:-----------------------------------|:-----------------------
 |malloc            |newString                           |localString
 |free              |delString                           |- (stack allocated)
-|strlen            |stringlen                           |stringlen
-|strcpy            |stringcpy, stringchcpy              |lstringcpy, lstringchpy
-|strncpy           |stringcpy, stringchcpy              |lstringcpy, lstringchpy
-|strcat            |stringcat, stringchcat              |lstringcat, ltringchcat
+|strlen            |stringlen                           |lstringlen
+|strcpy            |stringcpy, stringchcpy              |lstringcpy, lstringchcpy
+|strncpy           |stringcpy, stringchcpy              |lstringcpy, lstringchcpy
+|strcat            |stringcat, stringchcat              |lstringcat, lstringchcat
 |strcmp            |stringcmp, stringchcmp              |lstringcmp, lstringchcmp
 |strdup            |stringdup                           |lstringcpy *
-|truncation        |stringtrunc                         |stringtrunc
-|printf            |stringprintf                        |stringprintf
+|truncation        |stringtrunc                         |lstringtrunc
+|printf            |stringprintf                        |-
 
 * Why is there no lstringdup? While stringdup allocates a buffer dynamically, for lstringdup, one has to allocate it statically beforehand, so it doesn't do anything else than lstringcpy.
 
-Additionnally, the functions can internally raise an error, but because the functions try to mimic the standard C functions interfaces, the error code is not always returned.
-One has to call get_error() to know the value of an error code. However, apart from allocation failures (memory full), the need to check fo error should only arise at testing or debugging time.
+The source of a copy or concatenation, and the arguments of `stringprintf`, may point inside the destination buffer (for instance `stringchcat(s, s->str)`): the library handles the overlap and the reallocation.
+
+Use `lstringtrunc` to truncate a fixed-buffer `LString`; both truncation functions retain
+up to the requested number of characters.
+
+Additionally, the functions can internally raise an error, but because the functions try to mimic the standard C functions interfaces, the error code is not always returned.
+One has to call `get_stringerr()` to retrieve and reset the error code. Apart from allocation failures (memory full), checking for errors should mainly be needed during testing or debugging.
 
 |Error type                 |Value   |Signification
 |:--------------------------|:-------|:-----------------------------------------
@@ -59,14 +64,19 @@ One has to call get_error() to know the value of an error code. However, apart f
 |ST_INCONSISTENTSZ_ERR      |-1005   |Inconsistent buffer size detected (corruption)
 |ST_INCONSISTENTLEN_ERR     |-1006   |Inconsistent length detected (corruption)
 
-Finally, stringcheck performs several verifications on a String or a LString in order to check that it is not corrupted. It can be useful in debugging sessions.
+Note that the comparison functions return a negative error code (e.g. `ST_NULLPARAM_ERR`) when a parameter is NULL, which cannot be told apart from a regular "less than" result: call `get_stringerr()` if NULL parameters are possible. The error state is a single global variable, so it is not thread-safe.
+
+Finally, `stringcheck` performs several verifications on a dynamic `String` to check that it is not corrupted. It can be useful in debugging sessions.
 
 ## Preprocessor flags
 
-There are two optional flags:
-- TIDY will try to keep the buffers as clean as possible by zero-ing all the extra space
-- NDEBUG performs verifications of input parameters and performs internal verifications at each function call
+The optional `TIDY` flag keeps the unused buffer space zeroed. `stringcheck` can be called explicitly to verify a dynamic string's internal consistency.
 
-Both flags are turned off by default.
+`TIDY` is turned off by default.
 
 Published under MIT License
+
+## Tests
+
+Run the regression suite with `make test` (also included in `make check`). Run it with
+the optional buffer-clearing mode enabled using `make test-tidy`.

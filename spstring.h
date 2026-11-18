@@ -7,12 +7,15 @@
 *    to C character chains.
 *
 *    There are two types of strings:
-*    1. String is a fully dynamic string, that is be resized automatically
+*    1. String is a fully dynamic string, that is resized automatically
 *    at runtime when calling stringcpy and similar functions.
 *    One doesn't have to worry about buffer length.
 *    2. LString (Local String) has a fixed buffer size.
 *    lstringcpy and the like will check that the buffer size is respected
 *    and raise an error if it's not the case.
+*
+*    The source of a copy, concatenation or stringprintf argument may
+*    point inside the destination buffer (e.g. stringchcat(s, s->str)).
 *
 *    One can easily create a String from a C string with
 *    newString(const char *).
@@ -40,15 +43,15 @@
     Example Usage:
     {
       #define SIZE 40   <--- the LString can never grow longer than 39 chars
-      static char buff[SIZE] = "Hello";
-      LString *hello = localString(buff, SIZE);
+      char buff[SIZE] = "Hello";
+      LString hello = localString(buff, SIZE);
       ...
-      lstringchcat(hello, " World !");
+      lstringchcat(&hello, " World !");
     }  <--- automatic deallocation at the end of the scope
  
-   Warning: The following does not work (because localString does  
-            not allocate memory):
-    LString *hello = localString("Hello World", SIZE);  
+   Warning: The following does not work (because localString does
+            not allocate memory, and a string literal is read-only):
+    LString hello = localString("Hello World", SIZE);
 */
  
 typedef struct {
@@ -70,11 +73,11 @@ size_t lstringchcat ( LString *dst, const char *src );
    The size is automatically adjusted at runtime.
    
    Usage example:
-      LString *hello = newString("Hello ");
+      String *hello = newString("Hello ");
       ...
       stringchcat(hello, " world !");
       ...
-      delString(myString);
+      delString(hello);
 */
  
 typedef struct{
@@ -83,9 +86,9 @@ typedef struct{
     char *str;  /* null terminated character chain       */
 } String;
  
-/* Allocate a new String object.
- * The source buffer passed as argument is copied, so it must be
- * freed manually. */
+/* Allocate a new String object, to be released with delString.
+ * The C string passed as argument is copied: it remains owned by the
+ * caller (free it yourself if it was dynamically allocated). */
 String * newString(const char *);
 void delString(String *);
  
@@ -95,18 +98,22 @@ size_t stringcat(String *dst, const String *src);
 size_t stringchcat(String *dst, const char *src);
 String * stringdup(const String *);
  
-/* ========== The following functions apply both
-   ========== on String and LString ===================*/
- 
+/* Dynamic String helpers */
 size_t stringlen(const String *);
 int stringcmp(const String *st1, const String *st2);
 int stringchcmp(const String *st1, const char *st2);
-/* Truncation of length to Nth character */
 String * stringtrunc(String *string, size_t N);
 void stringprintf ( String *dst, const char * format, ... );
 
-/* Verification of internal consistency of a String/LString
-   Can be useful in a debugging session */
+/* Fixed-buffer LString helpers */
+size_t lstringlen(const LString *);
+int lstringcmp(const LString *st1, const LString *st2);
+int lstringchcmp(const LString *st1, const char *st2);
+LString * lstringtrunc(LString *string, size_t N);
+
+/* Verification of internal consistency of a String.
+   Returns 0 if consistent, else an ST_xxx_ERR code.
+   file and line are currently unused (pass __FILE__, __LINE__). */
 int stringcheck(const String *string, char *file, int line);
  
 /* Use this function to get the error code     */

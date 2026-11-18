@@ -18,26 +18,21 @@
 * Author: Nicolas Janin <>, (C) 2009
 *
 * Published under MIT License
-* strlcpy copyrghted by its author
 *
 */
  
 #include <stddef.h>
 #include <string.h>
-#include <malloc.h>
-#include <assert.h>
+#include <stdlib.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdint.h>
 #include "spstring.h"
- 
-#undef  TIDY               /* Tidy up buffers by filling them with zeroes       */
-                           /* Slows things down a little, so uncomment this     */
-                           /* only if needed.                                   */
  
 /* private (internal mechanics) */
 static int ST_ERR = ST_NO_ERR;
 static int incsz ( String *string, size_t len );
-size_t strlcpy(char *dst, const char *src, size_t siz);
+static int inbuffer ( const String *string, const char *p );
 
 /* --- Dynamic allocation
  
@@ -54,10 +49,16 @@ String * newString ( const char *chars )
                 {
                         newS->len = len;
                         newS->sz = len + 1;
-                        newS->str = strdup ( chars );
+                        newS->str = malloc ( len + 1 );
                         if ( newS->str == NULL )
                         {
                                 ST_ERR = ST_ALLOC_ERR;
+                                free ( newS );
+                                newS = NULL;
+                        }
+                        else
+                        {
+                                memcpy ( newS->str, chars, len + 1 );
                         }
                 }
                 else
@@ -74,9 +75,6 @@ String * newString ( const char *chars )
  
 void delString ( String *string )
 {
-#ifdef NDEBUG
-        stringcheck ( string, __FILE__, __LINE__ );
-#endif
         if ( string != NULL )
         {
                 if ( string->str != NULL )
@@ -100,11 +98,19 @@ void delString ( String *string )
 /* Copy - Will increase dst allocation if src is too large */
 size_t stringcpy ( String *dst, const String *src )
 {
-#ifdef NDEBUG
-        stringcheck ( src, __FILE__, __LINE__ );
-        stringcheck ( dst, __FILE__, __LINE__ );
-#endif
+        if ( dst == NULL || src == NULL || dst->str == NULL || src->str == NULL )
+        {
+                ST_ERR = dst == NULL || src == NULL ? ST_NULLPARAM_ERR : ST_NULLSTR_ERR;
+                return ( size_t ) ST_ERR;
+        }
         size_t len = src->len;
+        if ( len == SIZE_MAX )
+        {
+                ST_ERR = ST_ALLOC_ERR;
+                return ( size_t ) ST_ERR;
+        }
+        if ( dst == src )
+                return len;
         if ( dst->sz <= len )
         {
                 if ( incsz ( dst, len + 1 ) == ST_ALLOC_ERR )
@@ -114,10 +120,9 @@ size_t stringcpy ( String *dst, const String *src )
         }
  
         dst->len = len;
+        memmove ( dst->str, src->str, len + 1 );
 #ifdef TIDY
-        strlcpy ( dst->str, src->str, len + 1 );
-#else
-        strcpy ( dst->str, src->str );
+        memset ( dst->str + len + 1, 0, dst->sz - len - 1 );
 #endif
         return len;
 }
@@ -125,28 +130,34 @@ size_t stringcpy ( String *dst, const String *src )
 /* Copy - Will increase dst allocation if src is too large */
 size_t stringchcpy ( String *dst, const char *src )
 {
-#ifdef NDEBUG
-        stringcheck ( dst, __FILE__, __LINE__ );
-#endif
-        if ( src == NULL )
+        if ( dst == NULL || src == NULL )
         {
                 ST_ERR = ST_NULLPARAM_ERR;
                 return ST_NULLPARAM_ERR;
         }
+        if ( dst->str == NULL )
+        {
+                ST_ERR = ST_NULLSTR_ERR;
+                return ( size_t ) ST_ERR;
+        }
         size_t len = strlen ( src );
+        /* src may point inside dst->str: keep its offset across realloc */
+        int alias = inbuffer ( dst, src );
+        size_t offset = alias ? ( size_t ) ( src - dst->str ) : 0;
         if ( dst->sz <= len )
         {
                 if ( incsz ( dst, len + 1 ) == ST_ALLOC_ERR )
                 {
                         return ST_ALLOC_ERR;
                 }
+                if ( alias )
+                        src = dst->str + offset;
         }
  
         dst->len = len;
+        memmove ( dst->str, src, len + 1 );
 #ifdef TIDY
-        strlcpy ( dst->str, src, len + 1 );
-#else
-        strcpy ( dst->str, src );
+        memset ( dst->str + len + 1, 0, dst->sz - len - 1 );
 #endif
         return len;
 }
@@ -154,12 +165,19 @@ size_t stringchcpy ( String *dst, const char *src )
 /* Concatenation - Will increase dst allocation when necessary */
 size_t stringcat ( String *dst, const String *src )
 {
-#ifdef NDEBUG
-        stringcheck ( src, __FILE__, __LINE__ );
-        stringcheck ( dst, __FILE__, __LINE__ );
-#endif
+        if ( dst == NULL || src == NULL || dst->str == NULL || src->str == NULL )
+        {
+                ST_ERR = dst == NULL || src == NULL ? ST_NULLPARAM_ERR : ST_NULLSTR_ERR;
+                return ( size_t ) ST_ERR;
+        }
+        size_t oldlen = dst->len;
         size_t len = src->len;
-        size_t finallen = dst->len + len;
+        if ( oldlen == SIZE_MAX || len >= SIZE_MAX - oldlen )
+        {
+                ST_ERR = ST_ALLOC_ERR;
+                return ( size_t ) ST_ERR;
+        }
+        size_t finallen = oldlen + len;
         if ( dst->sz <= finallen )
         {
                 if ( incsz ( dst, finallen + 1 ) == ST_ALLOC_ERR )
@@ -168,8 +186,8 @@ size_t stringcat ( String *dst, const String *src )
                 }
         }
  
+        memmove ( dst->str + oldlen, src->str, len + 1 );
         dst->len = finallen;
-        strcat ( dst->str, src->str );
 #ifdef TIDY
         size_t l = dst->len;
         char * end =  dst->str + l;
@@ -181,26 +199,39 @@ size_t stringcat ( String *dst, const String *src )
 /* Concatenation - Will increase dst allocation when necessary */
 size_t stringchcat ( String *dst, const char *src )
 {
-#ifdef NDEBUG
-        stringcheck ( dst, __FILE__, __LINE__ );
-#endif
-        if ( src == NULL )
+        if ( dst == NULL || src == NULL )
         {
                 ST_ERR = ST_NULLPARAM_ERR;
                 return ST_NULLPARAM_ERR;
         }
+        if ( dst->str == NULL )
+        {
+                ST_ERR = ST_NULLSTR_ERR;
+                return ( size_t ) ST_ERR;
+        }
+        size_t oldlen = dst->len;
         size_t len = strlen ( src );
-        size_t finallen = dst->len + len;
+        if ( oldlen == SIZE_MAX || len >= SIZE_MAX - oldlen )
+        {
+                ST_ERR = ST_ALLOC_ERR;
+                return ( size_t ) ST_ERR;
+        }
+        /* src may point inside dst->str: keep its offset across realloc */
+        int alias = inbuffer ( dst, src );
+        size_t offset = alias ? ( size_t ) ( src - dst->str ) : 0;
+        size_t finallen = oldlen + len;
         if ( dst->sz <= finallen )
         {
                 if ( incsz ( dst, finallen + 1 ) == ST_ALLOC_ERR )
                 {
                         return ST_ALLOC_ERR;
                 }
+                if ( alias )
+                        src = dst->str + offset;
         }
  
+        memmove ( dst->str + oldlen, src, len + 1 );
         dst->len = finallen;
-        strcat ( dst->str, src );
 #ifdef TIDY
         size_t l = dst->len;
         char * end =  dst->str + l;
@@ -213,17 +244,14 @@ size_t stringchcat ( String *dst, const char *src )
 /* Duplication - allocate a new String */
 String * stringdup ( const String *src )
 {
-#ifdef NDEBUG
-        stringcheck ( src, __FILE__, __LINE__ );
-#endif
         String *string = NULL;
-        if ( src != NULL )
+        if ( src != NULL && src->str != NULL )
         {
                 string = newString ( src->str );
         }
         else
         {
-                ST_ERR = ST_NULLPARAM_ERR;
+                ST_ERR = src == NULL ? ST_NULLPARAM_ERR : ST_NULLSTR_ERR;
         }
         return string;
 }
@@ -242,9 +270,17 @@ String * stringdup ( const String *src )
 LString localString ( char *chars, size_t szMax )
 {
         LString newS;
-        if ( chars != NULL )
+        if ( chars != NULL && szMax > 0 )
         {
-                newS = ( LString ) {szMax, strlen ( chars ), chars};
+                size_t len = 0;
+                while ( len < szMax && chars[len] != '\0' )
+                        ++len;
+                if ( len == szMax )
+                {
+                        chars[szMax - 1] = '\0';
+                        len = szMax - 1;
+                }
+                newS = ( LString ) {szMax, len, chars};
 #ifdef TIDY
                 size_t l = newS.len;
                 char * end =  chars + l;
@@ -253,7 +289,7 @@ LString localString ( char *chars, size_t szMax )
         }
         else
         {
-                ST_ERR = ST_NULLPARAM_ERR;
+                ST_ERR = chars == NULL ? ST_NULLPARAM_ERR : ST_OVERWRITE_ERR;
                 newS = ( LString ) {0, 0, NULL};
         }
         return newS;
@@ -262,10 +298,11 @@ LString localString ( char *chars, size_t szMax )
 /* Copy of LString - checks that there is no buffer overflow */
 size_t lstringcpy ( LString *dst, const LString *src )
 {
-#ifdef NDEBUG
-        stringcheck ( ( String * ) src, __FILE__, __LINE__ );
-        stringcheck ( ( String * ) dst, __FILE__, __LINE__ );
-#endif
+        if ( dst == NULL || src == NULL || dst->str == NULL || src->str == NULL )
+        {
+                ST_ERR = dst == NULL || src == NULL ? ST_NULLPARAM_ERR : ST_NULLSTR_ERR;
+                return ( size_t ) ST_ERR;
+        }
         size_t len = src->len;
         if ( dst->sz <= len )
         {
@@ -273,10 +310,9 @@ size_t lstringcpy ( LString *dst, const LString *src )
                 return ST_OVERWRITE_ERR;
         }
         dst->len = len;
+        memmove ( dst->str, src->str, len + 1 );
 #ifdef TIDY
-        strlcpy ( dst->str, src->str, dst->sz + 1 );
-#else
-        strcpy ( dst->str, src->str );
+        memset ( dst->str + len + 1, 0, dst->sz - len - 1 );
 #endif
         return len;
 }
@@ -286,13 +322,15 @@ size_t lstringcpy ( LString *dst, const LString *src )
  */
 size_t lstringchcpy ( LString *dst, const char *src )
 {
-#ifdef NDEBUG
-        stringcheck ( ( String * ) dst, __FILE__, __LINE__ );
-#endif
-        if ( src == NULL )
+        if ( dst == NULL || src == NULL )
         {
                 ST_ERR = ST_NULLPARAM_ERR;
                 return ST_NULLPARAM_ERR;
+        }
+        if ( dst->str == NULL )
+        {
+                ST_ERR = ST_NULLSTR_ERR;
+                return ( size_t ) ST_ERR;
         }
         size_t len = strlen ( src );
         if ( dst->sz <= len )
@@ -301,29 +339,35 @@ size_t lstringchcpy ( LString *dst, const char *src )
                 return ST_OVERWRITE_ERR;
         }
         dst->len = len;
+        memmove ( dst->str, src, len + 1 );
 #ifdef TIDY
-        strlcpy ( dst->str, src, dst->sz + 1 );
-#else
-        strcpy ( dst->str, src );
+        memset ( dst->str + len + 1, 0, dst->sz - len - 1 );
 #endif
         return len;
 }
  
 size_t lstringcat ( LString *dst, const LString *src )
 {
-#ifdef NDEBUG
-        stringcheck ( ( String * ) src, __FILE__, __LINE__ );
-        stringcheck ( ( String * ) dst, __FILE__, __LINE__ );
-#endif
+        if ( dst == NULL || src == NULL || dst->str == NULL || src->str == NULL )
+        {
+                ST_ERR = dst == NULL || src == NULL ? ST_NULLPARAM_ERR : ST_NULLSTR_ERR;
+                return ( size_t ) ST_ERR;
+        }
+        size_t oldlen = dst->len;
         size_t len = src->len;
-        size_t finallen = dst->len + len;
+        if ( oldlen == SIZE_MAX || len >= SIZE_MAX - oldlen )
+        {
+                ST_ERR = ST_OVERWRITE_ERR;
+                return ( size_t ) ST_ERR;
+        }
+        size_t finallen = oldlen + len;
         if ( finallen >= dst->sz )
         {
                 ST_ERR = ST_OVERWRITE_ERR;
                 return ST_OVERWRITE_ERR;
         }
+        memmove ( dst->str + oldlen, src->str, len + 1 );
         dst->len = finallen;
-        strcat ( dst->str, src->str );
 #ifdef TIDY
         size_t l = dst->len;
         char * end =  dst->str + l;
@@ -332,26 +376,34 @@ size_t lstringcat ( LString *dst, const LString *src )
         return len;
 }
  
-/* Cooncatenation of a fixed character chain to a LString */
+/* Concatenation of a fixed character chain to a LString */
 size_t lstringchcat ( LString *dst, const char *src )
 {
-#ifdef NDEBUG
-        stringcheck ( ( String * ) dst, __FILE__, __LINE__ );
-#endif
-        if ( src == NULL )
+        if ( dst == NULL || src == NULL )
         {
                 ST_ERR = ST_NULLPARAM_ERR;
                 return ST_NULLPARAM_ERR;
         }
+        if ( dst->str == NULL )
+        {
+                ST_ERR = ST_NULLSTR_ERR;
+                return ( size_t ) ST_ERR;
+        }
+        size_t oldlen = dst->len;
         size_t len = strlen ( src );
-        size_t finallen = dst->len + len;
+        if ( oldlen == SIZE_MAX || len >= SIZE_MAX - oldlen )
+        {
+                ST_ERR = ST_OVERWRITE_ERR;
+                return ( size_t ) ST_ERR;
+        }
+        size_t finallen = oldlen + len;
         if ( finallen >= dst->sz )
         {
                 ST_ERR = ST_OVERWRITE_ERR;
                 return ST_OVERWRITE_ERR;
         }
+        memmove ( dst->str + oldlen, src, len + 1 );
         dst->len = finallen;
-        strcat ( dst->str, src );
 #ifdef TIDY
         size_t l = dst->len;
         char * end =  dst->str + l;
@@ -365,27 +417,24 @@ size_t lstringchcat ( LString *dst, const char *src )
  
 size_t stringlen ( const String *string )
 {
+        if ( string == NULL )
+        {
+                ST_ERR = ST_NULLPARAM_ERR;
+                return ( size_t ) ST_ERR;
+        }
         return string->len;
 }
  
 /*
-    Check for an internal inconsistency in a LString.
+    Check for an internal inconsistency in a dynamic String.
+    Returns 0 if consistent, or the ST_xxx_ERR code of the first problem.
+    file and line are reserved for diagnostics and currently unused.
     You can use this in a debugging session.
 */
 int stringcheck ( const String *string, char *file, int line )
 {
-#ifdef NDEBUG
-        #define ASSERT(cond) if ( !(cond) ) { \
-                        printf("stringcheck error %s line %d:String(%zu/%zu)=\"%s\"\n", \
-                        file, line, string->len, string->sz, string->str); \
-                        assert( string != NULL ); }
-        ASSERT ( string != NULL );
-        ASSERT ( string->str != NULL );
-        ASSERT ( string->len < string->sz );
-        ASSERT ( string->len == strlen ( string->str ) );
-        return 0;
-        #undef ASSERT
-#else
+        ( void ) file;
+        ( void ) line;
         if ( string == NULL )
                 return ST_NULLPARAM_ERR;
         if ( string->str == NULL )
@@ -395,66 +444,175 @@ int stringcheck ( const String *string, char *file, int line )
         if ( string->len != strlen ( string->str ) )
                 return ST_INCONSISTENTLEN_ERR;
         return 0;
-#endif
 }
  
 /* String comparison */
 int stringcmp ( const String *st1, const String *st2 )
 {
-#ifdef NDEBUG
-        stringcheck ( ( String * ) st1, __FILE__, __LINE__ );
-        stringcheck ( ( String * ) st2, __FILE__, __LINE__ );
-#endif
-        if ( st1->len != st2->len )
+        if ( st1 == NULL || st2 == NULL )
         {
-                return ( int ) ( st2->len - st1->len );
+                ST_ERR = ST_NULLPARAM_ERR;
+                return ST_NULLPARAM_ERR;
         }
- 
+        if ( st1->str == NULL || st2->str == NULL )
+        {
+                ST_ERR = ST_NULLSTR_ERR;
+                return ST_NULLSTR_ERR;
+        }
         return strcmp ( st1->str, st2->str );
 }
  
 /* Comparison with a C chain */
 int stringchcmp ( const String *st1, const char *st2 )
 {
-#ifdef NDEBUG
-        stringcheck ( ( String * ) st1, __FILE__, __LINE__ );
-#endif
-        size_t lt2 = strlen ( st2 );
-        if ( st1->len != lt2 )
+        if ( st1 == NULL || st2 == NULL )
         {
-                return ( int ) ( lt2 - st1->len );
+                ST_ERR = ST_NULLPARAM_ERR;
+                return ST_NULLPARAM_ERR;
         }
- 
+        if ( st1->str == NULL )
+        {
+                ST_ERR = ST_NULLSTR_ERR;
+                return ST_NULLSTR_ERR;
+        }
         return strcmp ( st1->str, st2 );
 }
- 
-/* Truncation to the Nth character */
+
+size_t lstringlen ( const LString *string )
+{
+        if ( string == NULL )
+        {
+                ST_ERR = ST_NULLPARAM_ERR;
+                return ( size_t ) ST_ERR;
+        }
+        return string->len;
+}
+
+int lstringcmp ( const LString *st1, const LString *st2 )
+{
+        if ( st1 == NULL || st2 == NULL )
+        {
+                ST_ERR = ST_NULLPARAM_ERR;
+                return ST_NULLPARAM_ERR;
+        }
+        if ( st1->str == NULL || st2->str == NULL )
+        {
+                ST_ERR = ST_NULLSTR_ERR;
+                return ST_NULLSTR_ERR;
+        }
+        return strcmp ( st1->str, st2->str );
+}
+
+int lstringchcmp ( const LString *st1, const char *st2 )
+{
+        if ( st1 == NULL || st2 == NULL )
+        {
+                ST_ERR = ST_NULLPARAM_ERR;
+                return ST_NULLPARAM_ERR;
+        }
+        if ( st1->str == NULL )
+        {
+                ST_ERR = ST_NULLSTR_ERR;
+                return ST_NULLSTR_ERR;
+        }
+        return strcmp ( st1->str, st2 );
+}
+
+/* Truncation to at most N characters */
 String * stringtrunc ( String *string, size_t N )
 {
-#ifdef NDEBUG
-        stringcheck ( string, __FILE__, __LINE__ );
-#endif
-        string->len = N-1;
-        string->str[N-1] = '\0';
+        if ( string == NULL || string->str == NULL )
+        {
+                ST_ERR = string == NULL ? ST_NULLPARAM_ERR : ST_NULLSTR_ERR;
+                return NULL;
+        }
+        if ( string->sz == 0 || string->len >= string->sz )
+        {
+                ST_ERR = ST_INCONSISTENTSZ_ERR;
+                return NULL;
+        }
+        if ( N > string->len )
+                N = string->len;
+        string->len = N;
+        string->str[N] = '\0';
 #ifdef TIDY
-        size_t l = string->len;
-        char * end =  string->str + l;
-        for ( ; l < string->sz; l++ ) *end++ = 0;
+        memset ( string->str + N + 1, 0, string->sz - N - 1 );
 #endif
         return string;
 }
- 
- 
+
+LString * lstringtrunc ( LString *string, size_t N )
+{
+        if ( string == NULL || string->str == NULL )
+        {
+                ST_ERR = string == NULL ? ST_NULLPARAM_ERR : ST_NULLSTR_ERR;
+                return NULL;
+        }
+        if ( string->sz == 0 || string->len >= string->sz )
+        {
+                ST_ERR = ST_INCONSISTENTSZ_ERR;
+                return NULL;
+        }
+        if ( N > string->len )
+                N = string->len;
+        string->len = N;
+        string->str[N] = '\0';
+#ifdef TIDY
+        memset ( string->str + N + 1, 0, string->sz - N - 1 );
+#endif
+        return string;
+}
+
+
 /* Formatting */
 void stringprintf ( String *dst, const char * format, ... )
 {
-#ifdef NDEBUG
-        stringcheck ( dst, __FILE__, __LINE__ );
-#endif
-        va_list argp;
+        if ( dst == NULL || format == NULL )
+        {
+                ST_ERR = ST_NULLPARAM_ERR;
+                return;
+        }
+        if ( dst->str == NULL )
+        {
+                ST_ERR = ST_NULLSTR_ERR;
+                return;
+        }
+        va_list argp, measure;
         va_start ( argp, format );
-        dst->len = vsnprintf ( dst->str, dst->sz, format, argp ) ;
-        va_end ( argp ) ;
+        va_copy ( measure, argp );
+        int needed = vsnprintf ( NULL, 0, format, measure );
+        va_end ( measure );
+        if ( needed < 0 )
+        {
+                va_end ( argp );
+                ST_ERR = ST_OVERWRITE_ERR;
+                return;
+        }
+        /* Format into a fresh buffer: the arguments may point into dst->str,
+           so writing in place (or reallocating it first) is not safe. */
+        size_t newsz = dst->sz > ( size_t ) needed ? dst->sz : ( size_t ) needed + 1;
+        char *tmp = malloc ( newsz );
+        if ( tmp == NULL )
+        {
+                va_end ( argp );
+                ST_ERR = ST_ALLOC_ERR;
+                return;
+        }
+        int written = vsnprintf ( tmp, newsz, format, argp );
+        va_end ( argp );
+        if ( written < 0 || written > needed )
+        {
+                free ( tmp );
+                ST_ERR = ST_OVERWRITE_ERR;
+                return;
+        }
+#ifdef TIDY
+        memset ( tmp + written + 1, 0, newsz - ( size_t ) written - 1 );
+#endif
+        free ( dst->str );
+        dst->str = tmp;
+        dst->sz = newsz;
+        dst->len = ( size_t ) written;
 }
  
 /* Returns error type and resets ST_ERR */
@@ -469,87 +627,50 @@ int get_stringerr()
 * PRIVATE
 **************************************************/
  
-/* Increase string.sz to desired size */
+/* Increase string.sz to desired size.
+   Returns ST_NO_ERR on success, ST_ALLOC_ERR (and sets ST_ERR) on failure.
+   A pending error in ST_ERR is left untouched on success. */
 static int incsz ( String *string, size_t size )
 {
-        ST_ERR = ST_NO_ERR;
- 
         if ( string->sz < size )
         {
-            /* double as necessary */
+                /* double as necessary */
                 size_t newsz = string->sz;
-        do
+                if ( newsz == 0 )
+                        newsz = 1;
+                while ( newsz < size )
                 {
-                newsz *= 2;
-                } while (newsz < size);
-               
-                char *tmp = realloc ( string->str, (size_t)newsz );
- 
-                if ( tmp != NULL )
-                {
-#ifdef TIDY
-                        size_t l = string->len;
-                        char * end =  tmp + l;
-                        for ( ; l < size; l++ ) *end++ = 0;
-#endif
-                        string->str = tmp;
-                        string->sz = newsz;
+                        if ( newsz > SIZE_MAX / 2 )
+                        {
+                                newsz = size;
+                                break;
+                        }
+                        newsz *= 2;
                 }
-                else
+
+                char *tmp = realloc ( string->str, newsz );
+                if ( tmp == NULL )
                 {
                         ST_ERR = ST_ALLOC_ERR;
+                        return ST_ALLOC_ERR;
                 }
+#ifdef TIDY
+                memset ( tmp + string->len, 0, newsz - string->len );
+#endif
+                string->str = tmp;
+                string->sz = newsz;
         }
-        return ST_ERR;
+        return ST_NO_ERR;
 }
 
-/*
- * Copyright (c) 1998 Todd C. Miller <Todd.Miller@courtesan.com>
- *
- * Permission to use, copy, modify, and distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * Copy src to string dst of size siz.  At most siz-1 characters
- * will be copied.  Always NUL terminates (unless siz == 0).
- * Returns strlen(src); if retval >= siz, truncation occurred.
- */
-size_t strlcpy(char *dst, const char *src, size_t siz)
+/* Does p point inside the allocated buffer of string ?
+   Compared as integers: relational operators on unrelated pointers are
+   undefined behaviour in C. */
+static int inbuffer ( const String *string, const char *p )
 {
-     char       *d = dst;
-     const char *s = src;
-     size_t      n = siz;
- 
-     /* Copy as many bytes as will fit */
-     if (n != 0)
-     {
-         while (--n != 0)
-         {
-             if ((*d++ = *s++) == '\0')
-                 break;
-         }
-     }
- 
-     /* Not enough room in dst, add NUL and traverse rest of src */
-     if (n == 0)
-     {
-         if (siz != 0)
-             *d = '\0';          /* NUL-terminate dst */
-         while (*s++)
-             ;
-     }
- 
-     return (s - src - 1);       /* count does not include NUL */
- }
+        uintptr_t begin = ( uintptr_t ) string->str;
+        uintptr_t q = ( uintptr_t ) p;
+        return q >= begin && q - begin < string->sz;
+}
 
 #undef TIDY

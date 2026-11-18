@@ -72,15 +72,18 @@ One has to call `get_stringerr()` to retrieve and reset the error code. Apart fr
 |ST_INCONSISTENTSZ_ERR      |-1005   |Inconsistent buffer size detected (corruption)
 |ST_INCONSISTENTLEN_ERR     |-1006   |Inconsistent length detected (corruption)
 
-Note that the comparison functions return a negative error code (e.g. `ST_NULLPARAM_ERR`) when a parameter is NULL, which cannot be told apart from a regular "less than" result: call `get_stringerr()` if NULL parameters are possible. The error state is a single global variable, so it is not thread-safe.
+The error state is thread-local (one per thread, like `errno`): an error raised in one thread is never seen or reset by another. It is only touched when an error occurs or when `get_stringerr()` is called, so it costs nothing on the normal path.
 
-Finally, `stringcheck` performs several verifications on a dynamic `String` to check that it is not corrupted. It can be useful in debugging sessions.
+The comparison functions always return a valid ordering, even when given NULL: a NULL `String` (or a NULL buffer) sorts before any string and two NULLs compare equal, so they can safely be used with `qsort`. The NULL parameter is reported through `get_stringerr()`.
+
+Finally, `stringcheck` and `lstringcheck` perform several verifications on a `String` or `LString` to check that it is not corrupted, and return 0 or the corresponding error code. The `STRINGCHECK(s)` and `LSTRINGCHECK(s)` macros also print a `file:line:` diagnostic on stderr when a problem is found; pass `NULL` as file to the functions for a silent check. They can be useful in debugging sessions.
 
 ## Preprocessor flags
 
-The optional `TIDY` flag keeps the unused buffer space zeroed. `stringcheck` can be called explicitly to verify a dynamic string's internal consistency.
+- `TIDY` keeps the unused buffer space zeroed. Turned off by default.
+- `SPSTRING_NO_THREADS` makes the error state a plain static variable instead of a thread-local one, for targets without thread-local storage support (bare metal, some RTOS). Turned off by default.
 
-`TIDY` is turned off by default.
+The test suite uses POSIX threads and must be linked with `-pthread` (the Makefile does it).
 
 
 Published under MIT License

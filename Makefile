@@ -12,13 +12,13 @@ demo: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS)
 
 test_spstring: spstring.c test_spstring.c spstring.h
-	$(CC) -o $@ spstring.c test_spstring.c $(CFLAGS)
+	$(CC) -o $@ spstring.c test_spstring.c $(CFLAGS) -pthread
 
 test: test_spstring
 	./test_spstring
 
 test-tidy:
-	$(CC) -DTIDY -o test_spstring_tidy spstring.c test_spstring.c $(CFLAGS)
+	$(CC) -DTIDY -o test_spstring_tidy spstring.c test_spstring.c $(CFLAGS) -pthread
 	./test_spstring_tidy
 
 check: test-tidy test

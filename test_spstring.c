@@ -1,5 +1,9 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#ifndef SPSTRING_NO_THREADS
+#include <pthread.h>
+#endif
 #include "spstring.h"
 
 static int failures;
@@ -143,6 +147,55 @@ static void test_local_strings(void)
         CHECK(invalid.str == NULL);
 }
 
+static int compare_strings(const void *a, const void *b)
+{
+        return stringcmp(*(String *const *) a, *(String *const *) b);
+}
+
+static void test_comparison_ordering(void)
+{
+        String *b = newString("b");
+        String *a = newString("a");
+        String nobuf = { 0, 0, NULL };
+        CHECK(stringcmp(NULL, a) < 0);
+        CHECK(stringcmp(a, NULL) > 0);
+        CHECK(get_stringerr() == ST_NULLPARAM_ERR);
+        CHECK(stringcmp(&nobuf, a) < 0);
+        CHECK(get_stringerr() == ST_NULLSTR_ERR);
+        CHECK(stringchcmp(a, NULL) > 0);
+        CHECK(get_stringerr() == ST_NULLPARAM_ERR);
+
+        String *array[] = { b, NULL, a };
+        qsort(array, 3, sizeof array[0], compare_strings);
+        CHECK(array[0] == NULL && array[1] == a && array[2] == b);
+        get_stringerr();
+        delString(a);
+        delString(b);
+}
+
+#ifndef SPSTRING_NO_THREADS
+static void *thread_error(void *arg)
+{
+        (void) arg;
+        CHECK(get_stringerr() == ST_NO_ERR);   /* not the main thread's error */
+        stringlen(NULL);
+        return (void *) (long) get_stringerr();
+}
+#endif
+
+static void test_thread_local_error(void)
+{
+#ifndef SPSTRING_NO_THREADS
+        pthread_t thread;
+        void *result = NULL;
+        CHECK(newString(NULL) == NULL);        /* error in main thread */
+        CHECK(pthread_create(&thread, NULL, thread_error, NULL) == 0);
+        CHECK(pthread_join(thread, &result) == 0);
+        CHECK((long) result == ST_NULLPARAM_ERR);
+        CHECK(get_stringerr() == ST_NULLPARAM_ERR);
+#endif
+}
+
 static void test_errors_and_validation(void)
 {
         CHECK(newString(NULL) == NULL);
@@ -164,17 +217,17 @@ static void test_errors_and_validation(void)
         CHECK(get_stringerr() == ST_NULLPARAM_ERR);
         CHECK(stringdup(NULL) == NULL);
         CHECK(get_stringerr() == ST_NULLPARAM_ERR);
-        CHECK(stringcmp(NULL, NULL) == ST_NULLPARAM_ERR);
+        CHECK(stringcmp(NULL, NULL) == 0);
         CHECK(get_stringerr() == ST_NULLPARAM_ERR);
-        CHECK(stringchcmp(NULL, "x") == ST_NULLPARAM_ERR);
+        CHECK(stringchcmp(NULL, "x") < 0);
         CHECK(get_stringerr() == ST_NULLPARAM_ERR);
         CHECK(stringtrunc(NULL, 0) == NULL);
         CHECK(get_stringerr() == ST_NULLPARAM_ERR);
         CHECK(lstringlen(NULL) == (size_t) ST_NULLPARAM_ERR);
         CHECK(get_stringerr() == ST_NULLPARAM_ERR);
-        CHECK(lstringcmp(NULL, NULL) == ST_NULLPARAM_ERR);
+        CHECK(lstringcmp(NULL, NULL) == 0);
         CHECK(get_stringerr() == ST_NULLPARAM_ERR);
-        CHECK(lstringchcmp(NULL, "x") == ST_NULLPARAM_ERR);
+        CHECK(lstringchcmp(NULL, "x") < 0);
         CHECK(get_stringerr() == ST_NULLPARAM_ERR);
         CHECK(lstringtrunc(NULL, 0) == NULL);
         CHECK(get_stringerr() == ST_NULLPARAM_ERR);
@@ -187,14 +240,22 @@ static void test_errors_and_validation(void)
 
         char buffer[] = "ok";
         String valid = { sizeof buffer, 2, buffer };
-        CHECK(stringcheck(&valid, __FILE__, __LINE__) == 0);
-        CHECK(stringcheck(NULL, __FILE__, __LINE__) == ST_NULLPARAM_ERR);
+        CHECK(STRINGCHECK(&valid) == 0);
+        LString lvalid = { sizeof buffer, 2, buffer };
+        CHECK(LSTRINGCHECK(&lvalid) == 0);
+        CHECK(lstringcheck(NULL, NULL, 0) == ST_NULLPARAM_ERR);
+        LString lbad_length = { sizeof buffer, 1, buffer };
+        CHECK(lstringcheck(&lbad_length, NULL, 0) == ST_INCONSISTENTLEN_ERR);
+        char unterminated[3] = { 'a', 'b', 'c' };
+        String no_nul = { sizeof unterminated, 2, unterminated };
+        CHECK(stringcheck(&no_nul, NULL, 0) == ST_INCONSISTENTLEN_ERR);
+        CHECK(stringcheck(NULL, NULL, 0) == ST_NULLPARAM_ERR);
         String no_buffer = { 0, 0, NULL };
-        CHECK(stringcheck(&no_buffer, __FILE__, __LINE__) == ST_NULLSTR_ERR);
+        CHECK(stringcheck(&no_buffer, NULL, 0) == ST_NULLSTR_ERR);
         String bad_size = { 2, 2, buffer };
-        CHECK(stringcheck(&bad_size, __FILE__, __LINE__) == ST_INCONSISTENTSZ_ERR);
+        CHECK(stringcheck(&bad_size, NULL, 0) == ST_INCONSISTENTSZ_ERR);
         String bad_length = { sizeof buffer, 1, buffer };
-        CHECK(stringcheck(&bad_length, __FILE__, __LINE__) == ST_INCONSISTENTLEN_ERR);
+        CHECK(stringcheck(&bad_length, NULL, 0) == ST_INCONSISTENTLEN_ERR);
         CHECK(stringtrunc(&bad_size, 0) == NULL);
         CHECK(get_stringerr() == ST_INCONSISTENTSZ_ERR);
         LString bad_local_size = { 1, 1, buffer };
@@ -249,6 +310,8 @@ int main(void)
         test_dynamic_strings();
         test_local_strings();
         test_errors_and_validation();
+        test_comparison_ordering();
+        test_thread_local_error();
         test_aliasing();
         test_error_preserved_by_growth();
 

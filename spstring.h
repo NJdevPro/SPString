@@ -111,14 +111,24 @@ int lstringcmp(const LString *st1, const LString *st2);
 int lstringchcmp(const LString *st1, const char *st2);
 LString * lstringtrunc(LString *string, size_t N);
 
-/* Verification of internal consistency of a String.
+/* Comparisons return a valid ordering even on error: a NULL String or
+   NULL buffer sorts before any string, two NULLs compare equal.
+   NULL parameters are reported through get_stringerr(). */
+
+/* Verification of internal consistency of a String / LString.
    Returns 0 if consistent, else an ST_xxx_ERR code.
-   file and line are currently unused (pass __FILE__, __LINE__). */
-int stringcheck(const String *string, char *file, int line);
+   If file is not NULL, a diagnostic is printed on stderr on failure;
+   pass NULL for a silent check. */
+int stringcheck(const String *string, const char *file, int line);
+int lstringcheck(const LString *string, const char *file, int line);
+#define STRINGCHECK(s)  stringcheck((s), __FILE__, __LINE__)
+#define LSTRINGCHECK(s) lstringcheck((s), __FILE__, __LINE__)
  
-/* Use this function to get the error code     */
-/* if (get_stringerr() != ST_NO_ERR) --> error */
-int get_stringerr();  
+/* Use this function to get and reset the error code.
+   if (get_stringerr() != ST_NO_ERR) --> error
+   The error state is thread-local (one per thread, like errno), unless
+   the library is compiled with -DSPSTRING_NO_THREADS. */
+int get_stringerr(void);
  
 /* Possible errors */
 #define ST_NO_ERR                   -1000

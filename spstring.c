@@ -30,7 +30,23 @@
 #include "spstring.h"
  
 /* private (internal mechanics) */
-static int ST_ERR = ST_NO_ERR;
+/* Error state: one per thread, like errno.
+   Define SPSTRING_NO_THREADS on targets without thread-local storage
+   support (bare metal, some RTOS); ST_ERR is then a plain static. */
+#if defined(SPSTRING_NO_THREADS)
+#  define SP_THREAD_LOCAL
+#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+#  define SP_THREAD_LOCAL _Thread_local
+#elif defined(__GNUC__)
+#  define SP_THREAD_LOCAL __thread
+#elif defined(_MSC_VER)
+#  define SP_THREAD_LOCAL __declspec(thread)
+#else
+#  define SP_THREAD_LOCAL   /* unknown compiler: not thread-safe */
+#endif
+
+static SP_THREAD_LOCAL int ST_ERR = ST_NO_ERR;
+static int nullorder ( const void *a, const void *b );
 static int incsz ( String *string, size_t len );
 static int inbuffer ( const String *string, const char *p );
 
@@ -426,38 +442,77 @@ size_t stringlen ( const String *string )
 }
  
 /*
-    Check for an internal inconsistency in a dynamic String.
+    Check for an internal inconsistency in a String or LString.
     Returns 0 if consistent, or the ST_xxx_ERR code of the first problem.
-    file and line are reserved for diagnostics and currently unused.
+    If file is not NULL, a diagnostic "file:line: ..." is also printed on
+    stderr when a problem is found (see the STRINGCHECK macros).
     You can use this in a debugging session.
 */
-int stringcheck ( const String *string, char *file, int line )
+static int checkfields ( const char *str, size_t sz, size_t len,
+                         const char *file, int line )
 {
-        ( void ) file;
-        ( void ) line;
+        int err = 0;
+        const char *what = NULL;
+        if ( str == NULL )
+        {
+                err = ST_NULLSTR_ERR;
+                what = "NULL buffer";
+        }
+        else if ( len >= sz )
+        {
+                err = ST_INCONSISTENTSZ_ERR;
+                what = "length >= buffer size";
+        }
+        else if ( memchr ( str, '\0', sz ) != str + len )
+        {
+                err = ST_INCONSISTENTLEN_ERR;
+                what = "length does not match the terminating NUL";
+        }
+        if ( err != 0 && file != NULL )
+                fprintf ( stderr, "%s:%d: SPString inconsistency: %s "
+                          "(sz=%zu, len=%zu)\n", file, line, what, sz, len );
+        return err;
+}
+
+int stringcheck ( const String *string, const char *file, int line )
+{
         if ( string == NULL )
+        {
+                if ( file != NULL )
+                        fprintf ( stderr, "%s:%d: SPString inconsistency: "
+                                  "NULL String\n", file, line );
                 return ST_NULLPARAM_ERR;
-        if ( string->str == NULL )
-                return ST_NULLSTR_ERR;
-        if ( string->len >= string->sz )
-                return ST_INCONSISTENTSZ_ERR;
-        if ( string->len != strlen ( string->str ) )
-                return ST_INCONSISTENTLEN_ERR;
-        return 0;
+        }
+        return checkfields ( string->str, string->sz, string->len, file, line );
+}
+
+int lstringcheck ( const LString *string, const char *file, int line )
+{
+        if ( string == NULL )
+        {
+                if ( file != NULL )
+                        fprintf ( stderr, "%s:%d: SPString inconsistency: "
+                                  "NULL LString\n", file, line );
+                return ST_NULLPARAM_ERR;
+        }
+        return checkfields ( string->str, string->sz, string->len, file, line );
 }
  
-/* String comparison */
+/* Comparisons
+   The result is always a valid ordering, usable e.g. with qsort:
+   a NULL String (or NULL buffer) sorts before any string, and two NULLs
+   are equal. The error is reported through get_stringerr(). */
 int stringcmp ( const String *st1, const String *st2 )
 {
         if ( st1 == NULL || st2 == NULL )
         {
                 ST_ERR = ST_NULLPARAM_ERR;
-                return ST_NULLPARAM_ERR;
+                return nullorder ( st1, st2 );
         }
         if ( st1->str == NULL || st2->str == NULL )
         {
                 ST_ERR = ST_NULLSTR_ERR;
-                return ST_NULLSTR_ERR;
+                return nullorder ( st1->str, st2->str );
         }
         return strcmp ( st1->str, st2->str );
 }
@@ -468,12 +523,12 @@ int stringchcmp ( const String *st1, const char *st2 )
         if ( st1 == NULL || st2 == NULL )
         {
                 ST_ERR = ST_NULLPARAM_ERR;
-                return ST_NULLPARAM_ERR;
+                return nullorder ( st1, st2 );
         }
         if ( st1->str == NULL )
         {
                 ST_ERR = ST_NULLSTR_ERR;
-                return ST_NULLSTR_ERR;
+                return -1;
         }
         return strcmp ( st1->str, st2 );
 }
@@ -493,12 +548,12 @@ int lstringcmp ( const LString *st1, const LString *st2 )
         if ( st1 == NULL || st2 == NULL )
         {
                 ST_ERR = ST_NULLPARAM_ERR;
-                return ST_NULLPARAM_ERR;
+                return nullorder ( st1, st2 );
         }
         if ( st1->str == NULL || st2->str == NULL )
         {
                 ST_ERR = ST_NULLSTR_ERR;
-                return ST_NULLSTR_ERR;
+                return nullorder ( st1->str, st2->str );
         }
         return strcmp ( st1->str, st2->str );
 }
@@ -508,12 +563,12 @@ int lstringchcmp ( const LString *st1, const char *st2 )
         if ( st1 == NULL || st2 == NULL )
         {
                 ST_ERR = ST_NULLPARAM_ERR;
-                return ST_NULLPARAM_ERR;
+                return nullorder ( st1, st2 );
         }
         if ( st1->str == NULL )
         {
                 ST_ERR = ST_NULLSTR_ERR;
-                return ST_NULLSTR_ERR;
+                return -1;
         }
         return strcmp ( st1->str, st2 );
 }
@@ -616,7 +671,7 @@ void stringprintf ( String *dst, const char * format, ... )
 }
  
 /* Returns error type and resets ST_ERR */
-int get_stringerr()
+int get_stringerr ( void )
 {
         int err = ST_ERR;
         ST_ERR = ST_NO_ERR;
@@ -661,6 +716,12 @@ static int incsz ( String *string, size_t size )
                 string->sz = newsz;
         }
         return ST_NO_ERR;
+}
+
+/* Ordering when at least one operand is NULL: NULL < non-NULL */
+static int nullorder ( const void *a, const void *b )
+{
+        return ( a != NULL ) - ( b != NULL );
 }
 
 /* Does p point inside the allocated buffer of string ?
